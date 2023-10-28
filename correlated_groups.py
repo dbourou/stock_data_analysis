@@ -26,10 +26,7 @@ from matplotlib import style
 import yahoo_fin.stock_info as si
 # the package is not very well maintained, last update 2021 and now tons of errors
 # later susbstitute with another one, there are alternatives
-from yahooquery import Ticker
 
-
-style.use('ggplot')
 
 
 # get some common lists of stocks
@@ -52,9 +49,6 @@ other = other[['ACT Symbol', 'Security Name']]
 other.rename(columns={'ACT Symbol': 'Ticker'}, inplace=True)
 
 tickers = list(other['Ticker'].unique())
-
-##### REMOVE THIS AFTER
-tickers = tickers[0:200]
 
 # get the historical stock price data, and save them locally (this will take some time)
 # make also an "outputs folder" to store this and other data
