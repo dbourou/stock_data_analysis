@@ -24,20 +24,15 @@ matplotlib.use('QtAgg')
 from matplotlib import style
 
 import yahoo_fin.stock_info as si
-import yahoo_fin.news as news
 # the package is not very well maintained, last update 2021 and now tons of errors
 # later susbstitute with another one, there are alternatives
-
 from yahooquery import Ticker
 
 
 style.use('ggplot')
 
 
-
-
-# get some common lists of stocks, get also company data
-# we can later check if companies which correlate are also from same sectors
+# get some common lists of stocks
 other = si.tickers_other(include_company_data=True) # but idk which stockexchange they are from, get company info
 # other = si.tickers_dow()
 # other = si.tickers_nasdaq()
@@ -151,6 +146,7 @@ corr = df_corr.to_numpy()
 # to see how the stocks are distributed in terms of how correlated they are
 # and to see which cutoffs make sense (i.e., if almost all have 0.8 correlation
 # but very few have 0.85 then thats a good threshold)
+# unfortunately in this case almost all stocks have correlation close to 1
 
 # first replace the diagonal values with nans, we don't want those
 n = corr.shape[0]
@@ -202,7 +198,7 @@ for subgraph in networkx.connected_components(ga):
     groups.append(subgraph)
 
 
-# now turn this into a dataframe with an index for groups, and then find their sectors
+# now turn this into a dataframe with an index for groups
 
 groups_list = [list(group) for group in groups]
 
@@ -221,125 +217,19 @@ for i in range(0,len(groups_list)):
 
 
 # save tickers and their groups into a CSV, because the network algorithm can take a long time to run
+# so if we want to add subsequent analyses from here onward, good to reload the CSV we saved
 data_other = pd.DataFrame(grouped_stocks, columns=['Ticker', 'Corr group']) 
 
 data_other.to_csv('other_stocks_grouped.csv')
 
 data_other = pd.read_csv('other_stocks_grouped.csv')
 
-data_other.drop(columns=['Unnamed: 0'], inplace=True)
+# create a dataframe where each row is one group of correlated stocks (index is group number),
+# and all correlated stocks are a list
+data_other = data_other.groupby('Corr group')['Ticker'].apply(list)
 
 
-# now get the information about the countries and the sectors of the companies we grouped
-# we want to see if the groups formed have anything to do with sector or country
 
-# lets create a dictionary with the fields we are interested in
-# we will later turn it into a dataframe
-dictionary = {'Ticker':[],
-              'Country':[],
-              'Industry':[],
-              'Sector':[],
-              'Industry key':[],
-              'Sector key':[]}
-
-
-# sometimes API might not connect properly and all fields become NANs
-
-# loop through the tickers we grouped before and get the company data
-# if the data isn't there then add a "nan" value
-for tick in tickers:
-    
-    print('now')
-    dictionary['Ticker'].append(tick)
-    
-    t = Ticker(tick)
-    
-    try:
-        asset_info = t.asset_profile
-        info = asset_info[tick]
-        
-        try:
-            dictionary['Country'].append(info['country'])
-        except:
-            dictionary['Country'].append(np.nan)
-                   
-        try:
-            dictionary['Industry'].append(info['industry'])
-        except:
-            dictionary['Industry'].append(np.nan)
-                
-        try:
-            dictionary['Sector'].append(info['sector'])
-        except:
-            dictionary['Sector'].append(np.nan)
-                    
-        try:
-            dictionary['Industry key'].append(info['industryKey'])
-        except:
-            dictionary['Industry key'].append(np.nan)
-                        
-        try:
-            dictionary['Sector key'].append(info['sectorKey'])
-        except:
-            dictionary['Sector key'].append(np.nan)
-
-    except:
-        print('error with ticker: ', tick) 
-        
-        dictionary['Country'].append(np.nan)
-        dictionary['Industry'].append(np.nan)
-        dictionary['Sector'].append(np.nan)
-        dictionary['Industry key'].append(np.nan)
-        dictionary['Sector key'].append(np.nan)
-        
-# turn dictionary into dataframe
-df_info = pd.DataFrame.from_dict(dictionary)
-
-sector_data = data_other.merge(df_info, how='outer', on=['Ticker'])
-company_data = other.merge(sector_data, how='right', on=['Ticker'])
-# merge company data, group data and company name
-# on the subset of tickers we selected, and on the information about which "correlation group" they belong to
-
-# save company data offline
-company_data.to_csv('corr_company_data.csv')
-
-company_data = pd.read_csv('corr_company_data.csv')
-
-group_sizes = company_data['Corr group'].value_counts()
-# check also the sizes of the groups because it may happen that one group has almost all stocks correlated with one another
-
-# group tickers by "correlation group" and see if they tend to belong in the same country or sector
-
-countries = company_data[['Security Name', 'Corr group', 'Country']]
-
-sectors = company_data[['Security Name', 'Corr group', 'Sector']]
-
-def grouped_variables(data,variable):
-
-    data = data.set_index('Security Name')
-    data = data.groupby('Corr group')[variable].apply(list)
-    
-    variable_lists = list(data)
-    
-    #new_variable_lists = [[x for x in item if str(x) != 'nan'] for item in variable_lists]
-    
-    unique_list = [pd.Series(item).drop_duplicates().tolist() for item in variable_lists]
-    
-    return unique_list
-    
-
-grouped_countries = grouped_variables(countries, 'Country')
-grouped_sectors = grouped_variables(sectors, 'Sector')
-
-# store the grouped countries and sectors in a dataframe
-
-groups_df = {'# tickers' : list(group_sizes), 
-             'countries': grouped_countries, 
-             'sectors': grouped_sectors}
-
-groups_df = pd.DataFrame.from_dict(groups_df)
-
-groups_df.to_csv('grouped_countries_sectors.csv')
 
 
 
